@@ -18,33 +18,12 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-repositories {
-    google()
-    jcenter()
-}
+package com.aol.mobile.sdk.annotations
 
-buildscript {
-    apply from: 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-tools-android/master/env-props.gradle'
+data class VariableDescriptor(val modifiers: Collection<String>, val name: String, val type: String)
 
-    repositories {
-        google()
-        jcenter()
-    }
+data class MethodDescriptor(val modifiers: Collection<String>, val name: String,
+                            val returnType: String, val params: Set<VariableDescriptor>)
 
-    dependencies {
-        classpath KOTLIN_PLUGIN
-        classpath GIT_PUBLISH_PLUGIN
-    }
-}
-
-allprojects {
-    apply from: 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-tools-android/master/env-props.gradle'
-
-    repositories {
-        maven {
-            url 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-releases-android/maven/'
-        }
-        google()
-        jcenter()
-    }
-}
+data class TypeDescriptor(val modifiers: Collection<String>, val name: String,
+                          val fields: Set<VariableDescriptor>, val methods: Set<MethodDescriptor>)

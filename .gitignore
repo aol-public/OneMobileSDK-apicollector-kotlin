@@ -13,7 +13,9 @@ bin/
 gen/
 
 # IntelliJ
-.idea/
+.idea/*.xml
+.idea/libraries
+.idea/modules
 *.iml
 
 # Gradle files
