@@ -19,3 +19,6 @@
  */
 
 include ':api-collector'
+include ':annotations'
+
+project(':annotations').projectDir = new File('annotations/annotations')

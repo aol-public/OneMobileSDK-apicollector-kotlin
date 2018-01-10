@@ -18,9 +18,10 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.aol.mobile.sdk.annotations
+package com.aol.mobile.sdk.apicollector
 
 import com.google.gson.GsonBuilder
+import com.aol.mobile.sdk.annotations.PublicApi
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -29,7 +30,7 @@ import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
 
-@SupportedAnnotationTypes("PublicApi")
+@SupportedAnnotationTypes("com.aol.mobile.sdk.annotations.PublicApi")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 @SupportedOptions()
 class PublicApiGrabber : AbstractProcessor() {

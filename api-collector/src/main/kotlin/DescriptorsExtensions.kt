@@ -18,7 +18,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.aol.mobile.sdk.annotations
+package com.aol.mobile.sdk.apicollector
 
 import javax.lang.model.element.*
 
