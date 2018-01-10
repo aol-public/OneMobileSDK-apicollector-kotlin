@@ -18,33 +18,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-repositories {
-    google()
-    jcenter()
-}
+package com.aol.mobile.sdk.annotations
 
-buildscript {
-    apply from: 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-tools-android/master/env-props.gradle'
-
-    repositories {
-        google()
-        jcenter()
-    }
-
-    dependencies {
-        classpath KOTLIN_PLUGIN
-        classpath GIT_PUBLISH_PLUGIN
-    }
-}
-
-allprojects {
-    apply from: 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-tools-android/master/env-props.gradle'
-
-    repositories {
-        maven {
-            url 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-releases-android/maven/'
-        }
-        google()
-        jcenter()
-    }
-}
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class PublicApi(val pkg: String)
