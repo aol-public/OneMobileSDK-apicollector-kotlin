@@ -20,8 +20,8 @@
 
 package com.aol.mobile.sdk.apicollector
 
-import com.google.gson.GsonBuilder
 import com.aol.mobile.sdk.annotations.PublicApi
+import com.google.gson.GsonBuilder
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
@@ -30,10 +30,26 @@ import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
 
+const val BUILD_PATH_KEY = "BUILD_PATH_KEY"
+const val PUBLIC_API_FILENAME = "public_api_manifest.json"
+
 @SupportedAnnotationTypes("com.aol.mobile.sdk.annotations.PublicApi")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
-@SupportedOptions()
+@SupportedOptions(BUILD_PATH_KEY)
 class PublicApiGrabber : AbstractProcessor() {
+    private lateinit var apiFile: File
+
+    override fun init(procEnv: ProcessingEnvironment?) {
+        super.init(procEnv)
+
+        apiFile = procEnv.let { env ->
+            if (env == null || !env.options.containsKey(BUILD_PATH_KEY))
+                throw ConfigurationException("Provide $BUILD_PATH_KEY as processor options")
+
+            File(env.options[BUILD_PATH_KEY], PUBLIC_API_FILENAME)
+        }
+    }
+
     override fun process(annotations: Set<TypeElement>, roundEnv: RoundEnvironment): Boolean {
         val publicApiClasses: HashMap<String, TypeElement> = HashMap()
 
@@ -50,8 +66,8 @@ class PublicApiGrabber : AbstractProcessor() {
 
         val gson = GsonBuilder().create()
 
-        File("public_api.json").bufferedWriter().use { out ->
-            out.write(gson.toJson(apiDescription))
+        apiFile.bufferedWriter().use { writer ->
+            writer.write(gson.toJson(apiDescription))
         }
 
         return true
