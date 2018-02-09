@@ -27,12 +27,15 @@ import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.SourceVersion
+import javax.lang.model.element.Element
 import javax.lang.model.element.ExecutableElement
-import javax.lang.model.element.Modifier
 import javax.lang.model.element.Modifier.PROTECTED
 import javax.lang.model.element.Modifier.PUBLIC
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
+import javax.lang.model.type.TypeMirror
+import javax.lang.model.util.Elements
+import javax.lang.model.util.Types
 
 class PublicApiGrabber : AbstractProcessor() {
     companion object {
@@ -41,6 +44,8 @@ class PublicApiGrabber : AbstractProcessor() {
     }
 
     private lateinit var apiFile: File
+    private lateinit var typeUtils: Types
+    private lateinit var elementUtils: Elements
 
     override fun getSupportedOptions(): MutableSet<String> {
         return mutableSetOf(BUILD_PATH_KEY)
@@ -61,22 +66,24 @@ class PublicApiGrabber : AbstractProcessor() {
             if (env == null || !env.options.containsKey(BUILD_PATH_KEY))
                 throw ConfigurationException("Provide $BUILD_PATH_KEY as processor options")
 
+            typeUtils = env.typeUtils
+            elementUtils = env.elementUtils
             File(env.options[BUILD_PATH_KEY], PUBLIC_API_FILENAME)
         }
     }
 
     override fun process(annotations: Set<TypeElement>, roundEnv: RoundEnvironment): Boolean {
-        val publicApiClasses = annotations
-                .flatMap { roundEnv.getElementsAnnotatedWith(it) }
+        val publicApiClasses = mutableMapOf<String, TypeElement>()
+
+        annotations.flatMap { roundEnv.getElementsAnnotatedWith(it) }
                 .filterIsInstance(TypeElement::class.java)
-                .map { getPublicApiClasses(it, it.getAnnotation(PublicApi::class.java).pkg) }
-                .fold(mutableMapOf<String, TypeElement>()) { apiClassesMap, classesChunk ->
-                    apiClassesMap.putAll(classesChunk)
-                    apiClassesMap
+                .map {
+                    val pkg = it.getAnnotation(PublicApi::class.java).pkg
+                    getPublicApiClasses(publicApiClasses, it, pkg)
                 }
 
         val apiDescription = publicApiClasses.values
-                .map { it.asTypeDescriptor() }
+                .map { it.descriptor }
                 .sortedBy { it.name }
 
         if (apiDescription.isEmpty()) return false
@@ -86,81 +93,99 @@ class PublicApiGrabber : AbstractProcessor() {
         return true
     }
 
-    private fun getPublicApiClasses(entryElement: TypeElement, pkg: String): Map<String, TypeElement> {
-        val result = mutableMapOf<String, TypeElement>()
-        val qualifiedName = entryElement.qualifiedName.toString()
-        val typeUtils = processingEnv.typeUtils
+    private fun getPublicApiClasses(result: MutableMap<String, TypeElement>, element: TypeElement, pkg: String) {
+        with(element) {
+            if (!name.startsWith(pkg) || !isPublic || name in result.keys) return
 
-        if (!qualifiedName.startsWith(pkg)) return result
+            result[name] = element
 
-        if (entryElement.modifiers.any { it == PUBLIC || it == PROTECTED }) {
-            result[qualifiedName] = entryElement
+            publicElements.forEach {
+                when (it) {
+                    is ExecutableElement -> it.enclosingTypes
+                            .filterIsInstance(TypeElement::class.java)
+                            .forEach { getPublicApiClasses(result, it, pkg) }
+
+                    is VariableElement -> {
+                        val type = it.type
+                        if (type is TypeElement) getPublicApiClasses(result, type, pkg)
+                    }
+
+                    is TypeElement -> getPublicApiClasses(result, it, pkg)
+                }
+            }
+        }
+    }
+
+    private val Element.mods
+        get() = modifiers.map { it.name.toLowerCase() }.toSet()
+
+    private val Element.isPublic
+        get() = modifiers.any { it in setOf(PUBLIC, PROTECTED) }
+
+    private val Element.type
+        get() = typeUtils.asElement(asType())
+
+    private val TypeMirror.type
+        get() = typeUtils.asElement(this)
+
+    private val TypeElement.name
+        get() = elementUtils.getBinaryName(this).toString()
+
+    private val TypeElement.publicElements
+        get() = enclosedElements.filter { it.isPublic }
+
+    private val TypeElement.publicFields
+        get() = publicElements
+                .filterIsInstance(VariableElement::class.java)
+                .map { it.descriptor }.toSet()
+
+    private val TypeElement.publicMethods
+        get() = publicElements
+                .filterIsInstance(ExecutableElement::class.java)
+                .map { it.descriptor }.toSet()
+
+    private val TypeElement.descriptor
+        get() = TypeDescriptor(mods, name, publicFields, publicMethods)
+
+    private val ExecutableElement.methodName
+        get() = let {
+            val simpleName = simpleName.toString()
+
+            if (simpleName in "<init>") "constructor" else simpleName
         }
 
-        entryElement.enclosedElements
-                .filter { it.modifiers.any { it == PUBLIC || it == PROTECTED } }
-                .forEach { element ->
-                    when (element) {
-                        is ExecutableElement -> {
-                            (element.parameters.map { typeUtils.asElement(it.asType()) } + typeUtils.asElement(element.returnType))
-                                    .filterIsInstance(TypeElement::class.java)
-                                    .map { getPublicApiClasses(it, pkg) }
-                                    .forEach { result.putAll(it) }
-                        }
+    private val ExecutableElement.enclosingTypes
+        get() = parameters.map { it.type } + returnType.type
 
-                        is VariableElement -> {
-                            val type = typeUtils.asElement(element.asType())
-                            if (type is TypeElement) result.putAll(getPublicApiClasses(type, pkg))
-                        }
+    private val ExecutableElement.methodParams
+        get() = parameters.map { it.descriptor }
 
-                        is TypeElement -> result.putAll(getPublicApiClasses(element, pkg))
-                    }
-                }
+    private val ExecutableElement.returnTypeName
+        get() = let {
+            val actualReturnType = returnType.type
 
-        return result
-    }
-
-    private fun TypeElement.asTypeDescriptor(): TypeDescriptor {
-        val publicElements = enclosedElements.filter { it.modifiers.any { it == PUBLIC || it == PROTECTED } }
-        val modifiers = modifiers.asModifiersSet()
-        val name = processingEnv.elementUtils.getBinaryName(this).toString()
-        val fields = publicElements.filterIsInstance(VariableElement::class.java)
-                .map { it.asVariableDescriptor() }.toSet()
-        val methods = publicElements.filterIsInstance(ExecutableElement::class.java)
-                .map { it.asMethodDescriptor() }.toSet()
-
-        return TypeDescriptor(modifiers, name, fields, methods)
-    }
-
-    private fun ExecutableElement.asMethodDescriptor(): MethodDescriptor {
-        return with(processingEnv) {
-            val modifiers = modifiers.asModifiersSet()
-            val params = parameters.mapNotNull { it.asVariableDescriptor() }
-            val simpleName = simpleName.toString()
-            val name = if (simpleName in "<init>") "constructor" else simpleName
-            val actualReturnType = typeUtils.asElement(returnType)
-            val returnType = when (actualReturnType) {
-                is TypeElement -> elementUtils.getBinaryName(actualReturnType).toString()
+            when (actualReturnType) {
+                is TypeElement -> actualReturnType.name
                 else -> returnType.toString()
             }
-
-            MethodDescriptor(modifiers, name, returnType, params)
         }
-    }
 
-    private fun VariableElement.asVariableDescriptor(): VariableDescriptor {
-        return with(processingEnv) {
-            val modifiers = modifiers.asModifiersSet()
-            val name = simpleName.toString()
-            val actualType = typeUtils.asElement(asType())
-            val type = when (actualType) {
-                is TypeElement -> elementUtils.getBinaryName(actualType).toString()
+    private val ExecutableElement.descriptor
+        get () = MethodDescriptor(mods, methodName, returnTypeName, methodParams)
+
+    private val VariableElement.name
+        get() = simpleName.toString()
+
+    private val VariableElement.typeName
+        get() = let {
+            val actualType = type
+
+            when (actualType) {
+                is TypeElement -> actualType.name
                 else -> asType().toString()
             }
-
-            VariableDescriptor(modifiers, name, type)
         }
-    }
 
-    private fun Set<Modifier>.asModifiersSet() = map { it.name.toLowerCase() }.toSet()
+    private val VariableElement.descriptor
+        get() = VariableDescriptor(mods, name, typeName)
 }
