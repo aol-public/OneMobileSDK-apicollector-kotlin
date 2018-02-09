@@ -32,13 +32,28 @@ ext {
     ANNOTATIONS_VERSION = annotationsHeadTag ?: "$annotationsGitVersion-SNAPSHOT"
 }
 
+apply from: 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-tools-android/master/github-maven.gradle'
 apply plugin: 'java'
 apply plugin: 'kotlin'
-apply from: 'https://raw.githubusercontent.com/aol-public/OneMobileSDK-tools-android/master/github-maven.gradle'
+apply plugin: 'kotlin-kapt'
+
+kapt {
+    arguments {
+        arg("BUILD_PATH_KEY", "$buildDir.absolutePath")
+    }
+}
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION"
     implementation "com.github.salomonbrys.kotson:kotson:2.5.0"
+
+    kaptTest project(':api-collector')
+    testCompileOnly project(":annotations")
+
+    testImplementation project(':api-collector')
+    testImplementation "com.github.salomonbrys.kotson:kotson:2.5.0"
+    testImplementation "org.assertj:assertj-core:3.9.0"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$KOTLIN_VERSION"
 
     if (CI) {
         implementation "com.aol.one.publishers.android:annotations:$ANNOTATIONS_VERSION"

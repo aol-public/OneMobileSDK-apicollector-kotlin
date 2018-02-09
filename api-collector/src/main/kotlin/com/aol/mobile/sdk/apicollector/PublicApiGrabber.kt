@@ -21,23 +21,38 @@
 package com.aol.mobile.sdk.apicollector
 
 import com.aol.mobile.sdk.annotations.PublicApi
-import com.google.gson.GsonBuilder
+import com.google.gson.Gson
 import java.io.File
-import javax.annotation.processing.*
+import javax.annotation.processing.AbstractProcessor
+import javax.annotation.processing.ProcessingEnvironment
+import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.SourceVersion
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
+import javax.lang.model.element.Modifier.PROTECTED
+import javax.lang.model.element.Modifier.PUBLIC
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
 
-const val BUILD_PATH_KEY = "BUILD_PATH_KEY"
-const val PUBLIC_API_FILENAME = "public_api_manifest.json"
-
-@SupportedAnnotationTypes("com.aol.mobile.sdk.annotations.PublicApi")
-@SupportedSourceVersion(SourceVersion.RELEASE_8)
-@SupportedOptions(BUILD_PATH_KEY)
 class PublicApiGrabber : AbstractProcessor() {
+    companion object {
+        const val BUILD_PATH_KEY = "BUILD_PATH_KEY"
+        const val PUBLIC_API_FILENAME = "public_api_manifest.json"
+    }
+
     private lateinit var apiFile: File
+
+    override fun getSupportedOptions(): MutableSet<String> {
+        return mutableSetOf(BUILD_PATH_KEY)
+    }
+
+    override fun getSupportedSourceVersion(): SourceVersion {
+        return SourceVersion.RELEASE_8
+    }
+
+    override fun getSupportedAnnotationTypes(): MutableSet<String> {
+        return mutableSetOf(PublicApi::class.java.canonicalName)
+    }
 
     override fun init(procEnv: ProcessingEnvironment?) {
         super.init(procEnv)
@@ -51,12 +66,14 @@ class PublicApiGrabber : AbstractProcessor() {
     }
 
     override fun process(annotations: Set<TypeElement>, roundEnv: RoundEnvironment): Boolean {
-        val publicApiClasses: HashMap<String, TypeElement> = HashMap()
-
-        annotations
+        val publicApiClasses = annotations
                 .flatMap { roundEnv.getElementsAnnotatedWith(it) }
                 .filterIsInstance(TypeElement::class.java)
-                .forEach { fillPublicClasses(publicApiClasses, it, it.getAnnotation(PublicApi::class.java).pkg) }
+                .map { getPublicApiClasses(it, it.getAnnotation(PublicApi::class.java).pkg) }
+                .fold(mutableMapOf<String, TypeElement>()) { apiClassesMap, classesChunk ->
+                    apiClassesMap.putAll(classesChunk)
+                    apiClassesMap
+                }
 
         val apiDescription = publicApiClasses.values
                 .map { it.asTypeDescriptor() }
@@ -64,32 +81,83 @@ class PublicApiGrabber : AbstractProcessor() {
 
         if (apiDescription.isEmpty()) return false
 
-        val gson = GsonBuilder().create()
-
-        apiFile.bufferedWriter().use { writer ->
-            writer.write(gson.toJson(apiDescription))
-        }
+        apiFile.writeText(Gson().toJson(apiDescription))
 
         return true
     }
 
-    private fun fillPublicClasses(apiClasses: HashMap<String, TypeElement>, element: TypeElement, pkg: String) {
-        val qualifiedName = element.qualifiedName.toString()
-        if (!qualifiedName.startsWith(pkg) || apiClasses.contains(qualifiedName)) return
+    private fun getPublicApiClasses(entryElement: TypeElement, pkg: String): Map<String, TypeElement> {
+        val result = mutableMapOf<String, TypeElement>()
+        val qualifiedName = entryElement.qualifiedName.toString()
 
-        apiClasses[qualifiedName] = element
+        if (!qualifiedName.startsWith(pkg)) return result
 
-        val publicElements = element.enclosedElements.filter { it.modifiers.contains(Modifier.PUBLIC) }
+        if (entryElement.modifiers.any { it == PUBLIC || it == PROTECTED }) {
+            result[qualifiedName] = entryElement
+        }
 
-        publicElements
-                .filterIsInstance(ExecutableElement::class.java)
-                .flatMap { it.parameters.map { it.asType() } + it.returnType }
-                .mapNotNull { processingEnv.typeUtils.asElement(it) as? TypeElement }
-                .forEach { fillPublicClasses(apiClasses, it, pkg) }
+        entryElement.enclosedElements
+                .filter { it.modifiers.any { it == PUBLIC || it == PROTECTED } }
+                .forEach { element ->
+                    when (element) {
+                        is ExecutableElement -> (element.parameters + element.returnType)
+                                .filterIsInstance(TypeElement::class.java)
+                                .map { getPublicApiClasses(it, pkg) }
+                                .forEach { result.putAll(it) }
 
-        publicElements
-                .filterIsInstance(VariableElement::class.java)
-                .mapNotNull { processingEnv.typeUtils.asElement(it.asType()) as? TypeElement }
-                .forEach { fillPublicClasses(apiClasses, it, pkg) }
+                        is VariableElement -> {
+                            val type = element.asType()
+                            if (type is TypeElement) result.putAll(getPublicApiClasses(type, pkg))
+                        }
+
+                        is TypeElement -> result.putAll(getPublicApiClasses(element, pkg))
+                    }
+                }
+
+        return result
     }
+
+    private fun TypeElement.asTypeDescriptor(): TypeDescriptor {
+        val publicElements = enclosedElements.filter { it.modifiers.any { it == PUBLIC || it == PROTECTED } }
+        val modifiers = modifiers.asModifiersSet()
+        val name = processingEnv.elementUtils.getBinaryName(this).toString()
+        val fields = publicElements.filterIsInstance(VariableElement::class.java)
+                .map { it.asVariableDescriptor() }.toSet()
+        val methods = publicElements.filterIsInstance(ExecutableElement::class.java)
+                .map { it.asMethodDescriptor() }.toSet()
+
+        return TypeDescriptor(modifiers, name, fields, methods)
+    }
+
+    private fun ExecutableElement.asMethodDescriptor(): MethodDescriptor {
+        return with(processingEnv) {
+            val modifiers = modifiers.asModifiersSet()
+            val params = parameters.mapNotNull { it.asVariableDescriptor() }
+            val simpleName = simpleName.toString()
+            val name = if (simpleName in "<init>") "constructor" else simpleName
+            val actualReturnType = typeUtils.asElement(returnType)
+            val returnType = when (actualReturnType) {
+                is TypeElement -> elementUtils.getBinaryName(actualReturnType).toString()
+                else -> returnType.toString()
+            }
+
+            MethodDescriptor(modifiers, name, returnType, params)
+        }
+    }
+
+    private fun VariableElement.asVariableDescriptor(): VariableDescriptor {
+        return with(processingEnv) {
+            val modifiers = modifiers.asModifiersSet()
+            val name = simpleName.toString()
+            val actualType = typeUtils.asElement(asType())
+            val type = when (actualType) {
+                is TypeElement -> elementUtils.getBinaryName(actualType).toString()
+                else -> asType().toString()
+            }
+
+            VariableDescriptor(modifiers, name, type)
+        }
+    }
+
+    private fun Set<Modifier>.asModifiersSet() = map { it.name.toLowerCase() }.toSet()
 }
