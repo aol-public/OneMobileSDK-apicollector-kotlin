@@ -18,12 +18,70 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.aol.mobile.sdk.apicollector
+package com.aol.mobile.sdk.apicollector;
 
-data class TypeDescriptor(val modifiers: Collection<String>, val name: String,
-                          val fields: Set<VariableDescriptor>, val methods: Set<MethodDescriptor>)
+import com.aol.mobile.sdk.annotations.PublicApi;
 
-data class VariableDescriptor(val modifiers: Collection<String>, val name: String, val type: String)
+@PublicApi(pkg = "com.aol.mobile.sdk.apicollector")
+public class ApiClass {
+    public int publicInt;
+    protected int protectedInt;
+    int packageInt;
+    private int privateInt;
 
-data class MethodDescriptor(val modifiers: Collection<String>, val name: String,
-                            val returnType: String, val params: List<VariableDescriptor>)
+    public int getPrivateInt() {
+        return privateInt;
+    }
+
+    public void setPrivateInt(int privateInt) {
+        this.privateInt = privateInt;
+    }
+
+    public void apiPublicFun() {
+
+    }
+
+    protected void apiProtectedFun() {
+
+    }
+
+    private void apiPrivateFun() {
+
+    }
+
+    void apiPackageLocalFun() {
+
+    }
+
+    public Callback getCallback() {
+        return null;
+    }
+
+    protected void setCallback(Callback callback) {
+
+    }
+
+    public interface Callback {
+        class Callbacks {
+            public void apiPublicFun() {
+
+            }
+
+            protected void apiProtectedFun() {
+
+            }
+
+            private void apiPrivateFun() {
+
+            }
+
+            void apiPackageLocalFun() {
+
+            }
+        }
+    }
+
+    private class Ololo {
+
+    }
+}

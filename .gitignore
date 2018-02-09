@@ -16,6 +16,7 @@ gen/
 .idea/*.xml
 .idea/libraries
 .idea/modules
+.idea/dictionaries
 *.iml
 
 # Gradle files
