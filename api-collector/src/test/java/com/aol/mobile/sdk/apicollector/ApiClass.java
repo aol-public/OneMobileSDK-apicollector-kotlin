@@ -25,6 +25,7 @@ import com.aol.mobile.sdk.annotations.PublicApi;
 @PublicApi(pkg = "com.aol.mobile.sdk.apicollector")
 public class ApiClass {
     public int publicInt;
+    public FieldTestClass fieldTestClass;
     protected int protectedInt;
     int packageInt;
     private int privateInt;
@@ -38,6 +39,14 @@ public class ApiClass {
     }
 
     public void apiPublicFun() {
+
+    }
+
+    public ReturnTestClass getReturnTestClass() {
+        return null;
+    }
+
+    public void setParamTestClass(ParamTestClass value) {
 
     }
 

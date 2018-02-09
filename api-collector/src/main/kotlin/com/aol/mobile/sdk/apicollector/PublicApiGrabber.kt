@@ -89,6 +89,7 @@ class PublicApiGrabber : AbstractProcessor() {
     private fun getPublicApiClasses(entryElement: TypeElement, pkg: String): Map<String, TypeElement> {
         val result = mutableMapOf<String, TypeElement>()
         val qualifiedName = entryElement.qualifiedName.toString()
+        val typeUtils = processingEnv.typeUtils
 
         if (!qualifiedName.startsWith(pkg)) return result
 
@@ -100,13 +101,15 @@ class PublicApiGrabber : AbstractProcessor() {
                 .filter { it.modifiers.any { it == PUBLIC || it == PROTECTED } }
                 .forEach { element ->
                     when (element) {
-                        is ExecutableElement -> (element.parameters + element.returnType)
-                                .filterIsInstance(TypeElement::class.java)
-                                .map { getPublicApiClasses(it, pkg) }
-                                .forEach { result.putAll(it) }
+                        is ExecutableElement -> {
+                            (element.parameters.map { typeUtils.asElement(it.asType()) } + typeUtils.asElement(element.returnType))
+                                    .filterIsInstance(TypeElement::class.java)
+                                    .map { getPublicApiClasses(it, pkg) }
+                                    .forEach { result.putAll(it) }
+                        }
 
                         is VariableElement -> {
-                            val type = element.asType()
+                            val type = typeUtils.asElement(element.asType())
                             if (type is TypeElement) result.putAll(getPublicApiClasses(type, pkg))
                         }
 
