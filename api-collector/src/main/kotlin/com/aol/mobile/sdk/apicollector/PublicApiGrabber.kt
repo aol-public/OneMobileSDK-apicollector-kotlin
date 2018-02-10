@@ -155,7 +155,7 @@ class PublicApiGrabber : AbstractProcessor() {
         }
 
     private val ExecutableElement.enclosingTypes
-        get() = parameters.map { it.type } + returnType.type
+        get() = parameters.map { it.type } + thrownTypes.map { it.type } + returnType.type
 
     private val ExecutableElement.methodParams
         get() = parameters.map { it.descriptor }

@@ -58,6 +58,10 @@ public class ApiClass {
 
     }
 
+    public void unstable() throws TestException {
+
+    }
+
     void apiPackageLocalFun() {
 
     }
