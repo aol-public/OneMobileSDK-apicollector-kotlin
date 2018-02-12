@@ -20,6 +20,7 @@
 
 package com.aol.mobile.sdk.apicollector
 
+import com.aol.mobile.sdk.annotations.PrivateApi
 import com.aol.mobile.sdk.annotations.PublicApi
 import com.google.gson.Gson
 import java.io.File
@@ -56,7 +57,8 @@ class PublicApiGrabber : AbstractProcessor() {
     }
 
     override fun getSupportedAnnotationTypes(): MutableSet<String> {
-        return mutableSetOf(PublicApi::class.java.canonicalName)
+        return mutableSetOf(PublicApi::class.java.canonicalName,
+                PrivateApi::class.java.canonicalName)
     }
 
     override fun init(procEnv: ProcessingEnvironment?) {
@@ -77,10 +79,7 @@ class PublicApiGrabber : AbstractProcessor() {
 
         annotations.flatMap { roundEnv.getElementsAnnotatedWith(it) }
                 .filterIsInstance(TypeElement::class.java)
-                .map {
-                    val pkg = it.getAnnotation(PublicApi::class.java).pkg
-                    getPublicApiClasses(publicApiClasses, it, pkg)
-                }
+                .forEach { getPublicApiClasses(publicApiClasses, it, it.pkg) }
 
         val apiDescription = publicApiClasses.values
                 .map { it.descriptor }
@@ -95,7 +94,8 @@ class PublicApiGrabber : AbstractProcessor() {
 
     private fun getPublicApiClasses(result: MutableMap<String, TypeElement>, element: TypeElement, pkg: String) {
         with(element) {
-            if (!name.startsWith(pkg) || !isPublic || name in result.keys) return
+            if (!name.startsWith(pkg) || !isPublic || name in result.keys ||
+                    getAnnotation(PrivateApi::class.java) != null) return
 
             result[name] = element
 
@@ -115,6 +115,9 @@ class PublicApiGrabber : AbstractProcessor() {
             }
         }
     }
+
+    private val Element.pkg
+        get() = elementUtils.getPackageOf(this).qualifiedName.toString()
 
     private val Element.mods
         get() = modifiers.map { it.name.toLowerCase() }.toSet()

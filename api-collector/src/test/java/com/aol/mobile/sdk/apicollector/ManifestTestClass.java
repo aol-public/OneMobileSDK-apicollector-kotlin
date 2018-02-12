@@ -23,6 +23,6 @@ package com.aol.mobile.sdk.apicollector;
 
 import com.aol.mobile.sdk.annotations.PublicApi;
 
-@PublicApi(pkg = "com.aol.mobile.sdk.apicollector")
+@PublicApi
 public class ManifestTestClass {
 }

@@ -20,17 +20,8 @@
 
 package com.aol.mobile.sdk.apicollector;
 
-import com.aol.mobile.sdk.annotations.PublicApi;
+import com.aol.mobile.sdk.annotations.PrivateApi;
 
-@PublicApi
-public class CircleTestClass1 {
-    public CircleTestClass2 reference;
-
-    public CircleTestClass2 getReference() {
-        return reference;
-    }
-
-    public void setReference(CircleTestClass2 reference) {
-        this.reference = reference;
-    }
+@PrivateApi
+public class PrivateApiClass {
 }
