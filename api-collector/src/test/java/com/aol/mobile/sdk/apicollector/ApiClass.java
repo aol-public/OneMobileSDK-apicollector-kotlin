@@ -20,12 +20,14 @@
 
 package com.aol.mobile.sdk.apicollector;
 
+import com.aol.mobile.sdk.annotations.PrivateApi;
 import com.aol.mobile.sdk.annotations.PublicApi;
 
-@PublicApi(pkg = "com.aol.mobile.sdk.apicollector")
+@PublicApi
 public class ApiClass {
     public int publicInt;
     public FieldTestClass fieldTestClass;
+    public PrivateApiClass privateApiClass;
     protected int protectedInt;
     int packageInt;
     private int privateInt;
@@ -72,6 +74,11 @@ public class ApiClass {
 
     protected void setCallback(Callback callback) {
 
+    }
+
+    @PrivateApi
+    public enum PrivateEnum {
+        ONE, TWO
     }
 
     public interface Callback {
